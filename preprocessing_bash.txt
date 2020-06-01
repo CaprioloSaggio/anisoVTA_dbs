@@ -1,0 +1,117 @@
+ ______________________________
+|MY PREPROCESSING step-by-step |
+|______________________________|
+
+
+INTRO
+___________________________________________________________________________________
+-find the correct directory
+$ cd /mnt/c/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/
+
+
+
+MRTRIX
+____________________________________________________________________________________
+The following steps regard a single acquisition (b0_PA in this case), but it 
+needs to be performed on all of them (dti_data, b0_AP or b0_PA). Thereafter, 
+all the final outputs have to be moved (cp [options] source destination)to 
+the main preprocessing folder to procede with fsl.
+
+-convert from dicom to .mif (mrconvert from_file to_file):
+$ mrconvert 000045E9 000045E9/results/dti_raw.mif
+-oder (mit b0 und b1250 zusammen):
+$ mrconvert dwi_data_AP dwi_data_AP/results/dti_raw.mif
+
+-export bvecs and bvals as text files from images:
+$ mrinfo dti_raw.mif -export_grad_fsl bvecs bvals
+
+-apply denoising, according to the assumption on the nature of noise in this 
+ algorithm, this must be the first step:
+$ dwidenoise dti_raw.mif dti_den.mif
+
+-perform unringing (remove Gibbs ringing artefacts(*)):
+$ mrdegibbs dti_den.mif dti_den_unr.mif -axes 0,1
+
+-convert to .nii file:
+$ mrconvert dti_den_unr.mif dti_data.nii
+
+-copy file in the right folder
+$ cp 0000AE39/results__/dti_data.nii ../fsl_analyses/dti_data_b0_PA.nii
+
+
+
+FSL
+___________________________________________________________________________________
+-merge b0 acquisitions:
+$ fslmerge -t b0_AP_PA.nii dti_data_b0_AP.nii dti_data_b0_PA.nii
+
+-draft the acqparams.txt file to feed into topup (https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/topup/Faq).
+ In order to get information about the phase encoding direction and total readout 
+ time of an image, type the following command:
+$ mrinfo /mnt/c/Users/\Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/0000AE39/results__/dti_raw.mif
+
+-run topup to correct for off-resonance field distortions:
+$ topup --imain=b0_AP_PA.nii.gz --datain=acqparams6.txt --config=b02b0.cnf --out=topup/topup_ --fout=field --iout=unwarped_dti
+
+-extract brain mask (compute the average of all volumes of the --iout output from 
+ topup and run BET on that):
+$ fslmaths unwarped_dti -Tmean unwarped_dti_m
+$ bet unwarped_dti_m unwarped_dti_brain -m
+
+-create an index file that tells eddy which line/of the lines in the acqparams.txt 
+ file that are relevant for the data passed into eddy (in my case all the dti 
+ volumes are acquired A>>P, so the first line describe them all):
+$ indx=""
+$ for ((i=1; i<=64; i+=1)); do indx="$indx 1"; done
+$ echo $indx > index.txt
+
+-import dti_data, bvals and bvecs files of the main acquisition (the 64 volumes):
+$ cp /mnt/c:/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/0000FFD6/results__/bvecs /mnt/c:/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/fsl_analyses/bvecs
+$ cp /mnt/c:/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/0000FFD6/results__/bvals /mnt/c:/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/fsl_analyses/bvals
+
+-modify the bvals and bvecs files adding the b0 volumes (a AP or PA volume is represented by a 0)
+
+-create the main input to eddy: 4D data containing also the b0 volumes in case of reverse-phase encoding:
+$ fslmerge -t dti_data_all.nii dti_data_b0_AP.nii dti_data_b0_PA.nii dti_data.nii
+
+-run eddy to correct eddy currents distortions:
+$ eddy_openmp --imain=dti_data_all.nii --mask=unwarped_dti_brain_mask --acqp=acqparams6.txt --index=index.txt --bvecs=bvecs --bvals=bvals --topup=topup/topup_ --out=eddy_corrected_data
+
+-OPTIONAL: perform quality control on a single subject:
+$ eddy_quad eddy_corrected_data -idx index.txt -par acqparams6.txt -m unwarped_dti_brain_mask -b bvals
+
+-run dtifit in order to obtain the DTI of the image:
+$ dtifit --data=eddy_corrected_data.nii --mask=unwarped_dti_brain_mask --bvecs=bvecs --bvals=bvals --save_tensor --out=dti (**)
+
+# to be checked!!!!!!!!
+-run flirt to perform coregistration
+$ bet anat_t1_tra anat_t1_tra_brain -m
+$ epi_reg --epi=dti_data_b0_AP.nii --t1=anat_t1_tra --t1brain=anat_t1_tra_brain --out=reg
+
+
+* GIBBS RINGING ARTEFACTS
+Also known as truncation, ringing, or spectral leakage artefacts, typically 
+appear as multiple fine parallel lines immediately adjacent to high-contrast 
+interfaces.
+Gibbs artifacts occur as a consequence of using Fourier transforms to reconstruct 
+MR signals into images. In theory, any signal can be represented as an infinite 
+summation of sine waves of different amplitudes, phases, and frequencies. In MR 
+imaging, however, we are restricted to sampling a finite number of frequencies and 
+must therefore approximate the image by using only a relatively few harmonics in 
+its Fourier representation.  The Fourier series, then, is cut short or truncated, 
+hence the name for this artifact. That's why it is present in areas at high 
+frequency information.
+
+** DTIFIT OUTPUT FILES
+<basename>_tensor - tensor as a 4D file in this order: Dxx, Dxy, Dxz, Dyy, Dyz, Dzz 
+<basename>_V1 - 1st eigenvector
+<basename>_V2 - 2nd eigenvector
+<basename>_V3 - 3rd eigenvector
+<basename>_L1 - 1st eigenvalue
+<basename>_L2 - 2nd eigenvalue
+<basename>_L3 - 3rd eigenvalue
+<basename>_MD - mean diffusivity
+<basename>_FA - fractional anisotropy (isotropic ~ 0; stick-like ~1)
+<basename>_MO - mode of the anisotropy (oblate ~ -1; isotropic ~ 0; prolate ~ 1)
+<basename>_S0 - raw T2 signal with no diffusion weighting
+
