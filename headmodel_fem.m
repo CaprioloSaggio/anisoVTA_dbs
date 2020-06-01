@@ -13,7 +13,7 @@ mri = ft_read_mri(image);
 disp('########## Reslicing the volume ##########')
 cfg     = [];
 cfg.dim = mri.dim;
-mri     = ft_volumereslice(cfg,mri);
+mri     = ft_volumereslice(cfg, mri);
 
 %% show intermediate result
 % cfg=[];
@@ -43,16 +43,17 @@ cfg        = [];
 % cfg.shift  = 0.3;
 cfg.shift = 0;
 
+% build the 
+cfg.method = 'rg_grid';
+mesh_grid = rg_ft_prepare_mesh(cfg,segmentedmri);
+
 % build hexahedral mesh
-cfg.method = 'rg_hexahedral';
-mesh_ = rg_ft_prepare_mesh(cfg,segmentedmri);
+% cfg.method = 'hexahedral';
+% mesh_hex = ft_prepare_mesh(cfg,segmentedmri);
 
-cfg.method = 'hexahedral';
-mesh_original = ft_prepare_mesh(cfg,segmentedmri);
-
-%build tetrahedral mesh
-% cfg.method = 'tetrahedral';
-% mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
+% build tetrahedral mesh
+cfg.method = 'tetrahedral';
+mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
 
 %% build headmodel
 % load conductivity tensor

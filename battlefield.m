@@ -3,28 +3,28 @@ clc
 
 %% find correspondence between hexa- and tetrahedrals
 % before this run headmodel_fem.m until section 'build the mesh' included
-% with the settings to obtain both the hexahedral mesh and the tetrahedral
-% one
+% with the settings to obtain both the grid and the tetrahedral mesh
 
 % compute center of each hexahedral element in the mesh defining a new
-% array of 3D points
-disp('########## Computing grid based on hexahedral mesh ##########')
-tic
-mesh_hex.ctr = [];
-for el = 1:size(mesh_hex.hex,1)  % very demanding computation
-    m = [];                      % TODO: find a faster way!!
-    for i = 1:8
-        m = [m; mesh_hex.pos(mesh_hex.hex(el,i),:)];
-    end
-    m = mean(m);
-    mesh_hex.ctr = [mesh_hex.pnt; m(1), m(2), m(3)];
-end
-toc
+% array of 3D points (in order to run this, run the section 'build the mesh' 
+% in headmodel_fem.m with cfg.method = 'hexahedral' before)
+% disp('########## Computing grid based on hexahedral mesh ##########')
+% tic
+% mesh_hex.ctr = [];
+% for el = 1:size(mesh_hex.hex,1)  % very demanding computation
+%     m = [];                      % TODO: find a faster way!!
+%     for i = 1:8
+%         m = [m; mesh_hex.pos(mesh_hex.hex(el,i),:)];
+%     end
+%     m = mean(m);
+%     mesh_hex.ctr = [mesh_hex.pnt; m(1), m(2), m(3)];
+% end
+% toc
 
 % build the KDtree
 disp('########## Convert grid to KD-Tree data structure ##########')
 tic
-mesh_hex.ctr = KDTreeSearcher(mesh_hex.pnt)
+mesh_grid.ctr = KDTreeSearcher(mesh_grid.pos)
 toc
 % mesh_hex.ctr = KDTreeSearcher(mesh_hex.ctr)
 
@@ -33,20 +33,20 @@ toc
 disp('########## Computing grid based on tetrahedral mesh ##########')
 tic
 mesh_tet.ctr = [];
-for el = 1:size(mesh_tet.tet,1)  % very demanding computation: takes some minutes
-    m = [];
-    for i = 1:4  % probably this cycle can be speeded up (e.g. by avoiding it)
-        m = [m; mesh_tet.pos(mesh_tet.tet(el,i),:)];
-    end
+% for el = 1:size(mesh_tet.tet,1)  % very demanding computation: takes some minutes
+%     for i = 1:4  % probably this cycle can be speeded up (e.g. by avoiding it)
+%         m = [m; mesh_tet.pos(mesh_tet.tet(el,i),:)];
+%     end
+    m = mesh_tet.pos(mesh_tet.tet(1:size(mesh_tet.tet,1),1:4),:);
     m = mean(m);
-    mesh_tet.ctr = [mesh_tet.pnt; m(1), m(2), m(3)];
+    mesh_tet.ctr = [mesh_tet.ctr; m(1), m(2), m(3)];
 end
 toc
 
 % run Nearest Neighbours
 disp('########## Running Nearest Neighbour to find correspondences ##########')
 tic
-nn = knnsearch(mesh_hex.ctr, mesh_tet.ctr);
+nn = knnsearch(mesh_grid.ctr, mesh_tet.ctr);
 toc
 
 %% resample electrode grid  % to be continued
