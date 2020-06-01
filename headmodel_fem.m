@@ -40,26 +40,28 @@ segmentedmri  = ft_volumesegment(cfg, mri);
 %% build the mesh
 disp('########## Preparing the mesh ##########')
 cfg        = [];
-cfg.shift  = 0.3;
+% cfg.shift  = 0.3;
+cfg.shift = 0;
 
 % build hexahedral mesh
-% cfg.method = 'rg_tetrahedral';
+cfg.method = 'rg_hexahedral';
+mesh_ = rg_ft_prepare_mesh(cfg,segmentedmri);
+
 cfg.method = 'hexahedral';
-% mesh = rg_ft_prepare_mesh(cfg,mri);
-mesh_hex = ft_prepare_mesh(cfg,segmentedmri);
+mesh_original = ft_prepare_mesh(cfg,segmentedmri);
 
 %build tetrahedral mesh
-cfg.method = 'tetrahedral';
-mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
+% cfg.method = 'tetrahedral';
+% mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
 
 %% build headmodel
-%load conductivity tensor
+% load conductivity tensor
 load('C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_cond.mat')
 
 disp('########## Rearranging conductivity tensor ##########')
 cond_t = [];
 for i=1:6
-    cond3d = r_cond(:,:,:,i);
+    cond3d = r_cond(:,:,:,i);   % this passage is added for more readibility
     cond_t = [ cond_t, reshape(cond3d, [numel(cond3d), 1]) ];
 end
 
