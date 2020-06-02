@@ -5,13 +5,14 @@ clc
 % before this run headmodel_fem.m until section 'build the mesh' included
 % with the settings to obtain both the grid and the tetrahedral mesh
 
+% ########## Not useful anymore: I directly compute a grid of central nodes ##########
 % compute center of each hexahedral element in the mesh defining a new
 % array of 3D points (in order to run this, run the section 'build the mesh' 
 % in headmodel_fem.m with cfg.method = 'hexahedral' before)
 % disp('########## Computing grid based on hexahedral mesh ##########')
 % tic
 % mesh_hex.ctr = [];
-% for el = 1:size(mesh_hex.hex,1)  % very demanding computation
+% for el = 1:size(mesh_hex.hex,1)  % very demanding computation (20 hours)
 %     m = [];                      % TODO: find a faster way!!
 %     for i = 1:8
 %         m = [m; mesh_hex.pos(mesh_hex.hex(el,i),:)];
@@ -22,26 +23,34 @@ clc
 % toc
 
 % build the KDtree
-disp('########## Convert grid to KD-Tree data structure ##########')
+disp('########## Converting grid to KD-Tree data structure ##########')
 tic
-mesh_grid.ctr = KDTreeSearcher(mesh_grid.pos)
+mesh_grid.ctr = KDTreeSearcher(mesh_grid.pos);
 toc
 % mesh_hex.ctr = KDTreeSearcher(mesh_hex.ctr)
 
 % compute center of each tetrahedral element in the mesh defining a new
 % array of 3D points
-disp('########## Computing grid based on tetrahedral mesh ##########')
+disp('########## Computing grid based on tetrahedral mesh (looking for central node for each element) ##########')
 tic
-mesh_tet.ctr = [];
-% for el = 1:size(mesh_tet.tet,1)  % very demanding computation: takes some minutes
-%     for i = 1:4  % probably this cycle can be speeded up (e.g. by avoiding it)
-%         m = [m; mesh_tet.pos(mesh_tet.tet(el,i),:)];
-%     end
-    m = mesh_tet.pos(mesh_tet.tet(1:size(mesh_tet.tet,1),1:4),:);
-    m = mean(m);
-    mesh_tet.ctr = [mesh_tet.ctr; m(1), m(2), m(3)];
-end
+mesh_tet.ctr = reshape(mesh_tet.pos(mesh_tet.tet(1:size(mesh_tet.tet,1),1:4),:), ...
+                       [size(mesh_tet.tet, 1), 4, 3]);                  
+mesh_tet.ctr = squeeze(mean(mesh_tet.ctr, 2));
 toc
+% %     ########## DEBUG ##########
+% disp('########## DEBUG ##########')
+% tic
+% for i = 1:4
+% mesh_tet.ctr_(:,i,:) = mesh_tet.pos(mesh_tet.tet(1:size(mesh_tet.tet,1),i),:); 
+% end
+% mesh_tet.ctr_ = squeeze(mean(mesh_tet.ctr_, 2));
+% toc
+% if isequal(mesh_tet.ctr, mesh_tet.ctr_)
+%     disp('The grid generated with reshape (faster), is CORRECT')
+% else
+%     disp('The grid generated with reshape (faster), is WRONG')
+% end
+% %     ########## DEBUG ##########
 
 % run Nearest Neighbours
 disp('########## Running Nearest Neighbour to find correspondences ##########')
