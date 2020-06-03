@@ -120,11 +120,11 @@ b0 = spm_vol(a_b0);
 
 % choose images
 ref = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\anat_t1_tra.nii';
-anat = niftiread(ref);
 source = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\b0.nii';
 dti = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\dti_tensor.nii';
+anat = niftiread(ref);
 
-% define configuration strucure
+% define configuration strucure (this is the default one)
 flags = [];
 flags.cost_fun = 'nmi';
 flags.sep = [4 2];

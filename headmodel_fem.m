@@ -2,14 +2,15 @@
 clear
 ft_defaults
 clc
-image = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\anat_t1_tra.nii';
+image = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
 disp('########## Starting FEM headmodel generation ##########')
+
 
 %% read image
 disp('########## Reading image ##########')
 mri = ft_read_mri(image);
 
-%% reslice the volume
+%% reslice volume
 disp('########## Reslicing the volume ##########')
 cfg     = [];
 cfg.dim = mri.dim;
@@ -38,13 +39,14 @@ segmentedmri  = ft_volumesegment(cfg, mri);
 % disp('########## Building an indexed volume comprehensive of all the segmented regions ##########')
 % seg_i = ft_datatype_segmentation(segmentedmri,'segmentationstyle','indexed');
 
+
 %% build the mesh
 disp('########## Preparing the mesh ##########')
 cfg        = [];
 % cfg.shift  = 0.3;
 cfg.shift = 0;
 
-% build the 
+% build grid from volume 
 cfg.method = 'rg_grid';
 mesh_grid = rg_ft_prepare_mesh(cfg,segmentedmri);
 
@@ -113,4 +115,4 @@ toc
 %% show result
 % disp('########## Showing results ##########')
 % ft_plot_mesh(mesh, 'surfaceonly', 'yes');
-% Achtung!!! This section is extremely heavy and MATLAB crashes (with 9.338M elements in the mesh)
+% Achtung!! This section is extremely heavy and MATLAB crashes (with 9.338M elements in the mesh)

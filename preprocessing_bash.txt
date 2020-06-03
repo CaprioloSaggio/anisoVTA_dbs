@@ -80,14 +80,20 @@ $ eddy_openmp --imain=dti_data_all.nii --mask=unwarped_dti_brain_mask --acqp=acq
 -OPTIONAL: perform quality control on a single subject:
 $ eddy_quad eddy_corrected_data -idx index.txt -par acqparams6.txt -m unwarped_dti_brain_mask -b bvals
 
+# DIFFUSION TENSOR EXTRACTION
 -run dtifit in order to obtain the DTI of the image:
 $ dtifit --data=eddy_corrected_data.nii --mask=unwarped_dti_brain_mask --bvecs=bvecs --bvals=bvals --save_tensor --out=dti (**)
 
-# to be checked!!!!!!!!
+# COREGISTRATION
 -run flirt to perform coregistration
+$ flirt -in anat_t1_tra.nii -ref dti_data_b0_AP.nii -out r_anat_t1_tra.nii -omat anat2epi.mat -dof 12
+$ mrconvert r_anat_t1_tra.nii.gz r_anat_t1_tra.nii
+
+-oder: epi_reg is optimized for the case of EPI-to-anatomical coregistration (to be checked)
 $ bet anat_t1_tra anat_t1_tra_brain -m
 $ epi_reg --epi=dti_data_b0_AP.nii --t1=anat_t1_tra --t1brain=anat_t1_tra_brain --out=reg
 
+-for the time being I'm running flirt only, but I plan to try also adding fnirt and see how results change
 
 * GIBBS RINGING ARTEFACTS
 Also known as truncation, ringing, or spectral leakage artefacts, typically 
