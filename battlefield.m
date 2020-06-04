@@ -1,6 +1,43 @@
 clear
 clc
 
+
+%% integrate electrodes into the headmodel mesh
+
+% %define elstruct
+% load('stim_options.mat')
+% [coords_mm,trajectory,markers]=ea_load_reconstruction(options);
+% elstruct(1).coords_mm=coords_mm;
+% elstruct(1).coords_mm=ea_resolvecoords(markers,options);
+% elstruct(1).trajectory=trajectory;
+% elstruct(1).name=options.patientname;
+% elstruct(1).markers=markers;
+% if max(S.amplitude{side})>4
+%     elstruct.stretchfactor=0.75; %(max(S.amplitude{side})/10);
+% else
+%     elstruct.stretchfactor=0.5;  % this should be the opted one in my trial
+% end
+
+
+% load <elspec> (in ea_gevat_horn elspec=getappdata(resultfig,'elspec')),
+% <elstruct> (as above), <side>
+load('C:\Users\Notebook\Desktop\Downloads\DBS\05_Workspaces\input_ea_buildelfv.mat');
+
+% TODO: next step is to obtain fv (that is a struct containing jsut faces and vertices of the GM)
+
+[elfv,ntissuetype,Y,electrode]=ea_buildelfv(elspec,elstruct,side);
+success=0;
+for attempt=1:3 % allow three attempts with really small jitters in case scene generates intersecting faces FIX ME this needs a better solution
+    try
+        [mesh.tet,mesh.pnt,activeidx,wmboundary,centroids,tissuetype]=ea_mesh_electrode(fv,elfv,ntissuetype,electrode,options,S,side,electrode.numel,Y,elspec);
+        success=1;
+        break
+    catch
+        Y=Y+randn(4)/700; % very small jitter on transformation which will be used on electrode.
+    end
+end
+
+
 %% find correspondence between hexa- and tetrahedrals
 % before this run headmodel_fem.m until section 'build the mesh' included
 % with the settings to obtain both the grid and the tetrahedral mesh

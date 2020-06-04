@@ -1,14 +1,23 @@
+%%%%%%%%%%%%%%%%%
+% FEM HEADMODEL %
+%%%%%%%%%%%%%%%%%
+tic
 %% initialize workspace and command line
 clear
 ft_defaults
 clc
-image = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
 disp('########## Starting FEM headmodel generation ##########')
+
+% insert here the path of the coregistered anatomical image
+anat = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
+% insert here the path of the diffusion tensor
+dti = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\dti_tensor.nii';
 
 
 %% read image
 disp('########## Reading image ##########')
-mri = ft_read_mri(image);
+mri = ft_read_mri(anat);
+
 
 %% reslice volume
 disp('########## Reslicing the volume ##########')
@@ -16,12 +25,14 @@ cfg     = [];
 cfg.dim = mri.dim;
 mri     = ft_volumereslice(cfg, mri);
 
+
 %% show intermediate result
 % cfg=[];
 % ft_sourceplot(cfg,mri);
 % wf = input('Are you ok with the result? Answer: [yes], no, or stop')    % TODO: implement a difference in behaviour between stop (return) and no (repeat last step)
 % if not(wf(1) == 'y' || wf(1) == 'Y') disp('Process interrupted by user'); return
 % end
+
 
 %% segment volume
 
@@ -35,6 +46,7 @@ segmentedmri  = ft_volumesegment(cfg, mri);
 
 % save segmentedmri segmentedmri
 
+
 %% put together the segmentation masks in a single indexed volume
 % disp('########## Building an indexed volume comprehensive of all the segmented regions ##########')
 % seg_i = ft_datatype_segmentation(segmentedmri,'segmentationstyle','indexed');
@@ -43,12 +55,17 @@ segmentedmri  = ft_volumesegment(cfg, mri);
 %% build the mesh
 disp('########## Preparing the mesh ##########')
 cfg        = [];
-% cfg.shift  = 0.3;
-cfg.shift = 0;
+% cfg.shift  = 0.3;  
+cfg.shift = 0;  
+% ########## this should avoid mis-matching when I run nearest neighbour
 
 % build grid from volume 
 cfg.method = 'rg_grid';
 mesh_grid = rg_ft_prepare_mesh(cfg,segmentedmri);
+% ########## Ask for a confirmation: I'm using anatomical data to obtain
+% ########## the grid correspondent to the conducitivity data, because
+% ########## before I've performed coregistration. Is it correct? The size
+% ########## of the 2 images is the same
 
 % build hexahedral mesh
 % cfg.method = 'hexahedral';
@@ -57,6 +74,7 @@ mesh_grid = rg_ft_prepare_mesh(cfg,segmentedmri);
 % build tetrahedral mesh
 cfg.method = 'tetrahedral';
 mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
+
 
 %% find correspondence with conductivity values
 
@@ -76,13 +94,16 @@ disp('########## Running Nearest Neighbour to find correspondences ##########')
 cond_i = knnsearch(mesh_grid.ctr, mesh_tet.ctr); % contains the index of the 
                                                  % conductivities that have
                                                  % a match in the mesh
-mesh_tet = rmfield(mesh_tet, ctr);  % clean structure
+mesh_tet = rmfield(mesh_tet, 'ctr');  % clean structure
                                                  
 
 %% build headmodel
 
 % load conductivity tensor
-load('C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_cond.mat')
+% load('C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_cond.mat')
+
+% get the diffusion data and convert them to conduction data
+r_cond = 0.736 * niftiread(dti);
 
 % rearrange conductivity tensor
 disp('########## Rearranging conductivity tensor ##########')
@@ -105,12 +126,14 @@ cfg.conductivity = cond;
 mesh_tet.tissue = [];
 mesh_tet.tissuelabel = [];
 
+% TODO: add a test to see if orientation is ok (there's a simbio function)
 mesh_tet.tet(:, [3, 4]) = mesh_tet.tet(:, [4, 3]);  % necessary not to get 
                                                     % an error from sb_calc_stiff 
                                                     % relative to orientation
-tic
+% tic
 vol = ft_prepare_headmodel(cfg, mesh_tet);
 toc
+
 
 %% show result
 % disp('########## Showing results ##########')
