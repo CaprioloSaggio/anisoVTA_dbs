@@ -22,6 +22,7 @@ clc
 % load <elspec> (in ea_gevat_horn elspec=getappdata(resultfig,'elspec')),
 % <elstruct> (as above), <side>
 load('C:\Users\Notebook\Desktop\Downloads\DBS\05_Workspaces\input_ea_buildelfv.mat');
+% useSI=1;
 
 % TODO: next step is to obtain fv (that is a struct containing jsut faces and vertices of the GM)
 

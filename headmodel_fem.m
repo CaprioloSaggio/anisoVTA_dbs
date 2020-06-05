@@ -74,6 +74,8 @@ mesh_grid = rg_ft_prepare_mesh(cfg,segmentedmri);
 % build tetrahedral mesh
 cfg.method = 'tetrahedral';
 mesh_tet = ft_prepare_mesh(cfg,segmentedmri);
+% TODO: consider directly using meshacylinder.m function to get the mesh of 
+%       the cut region around the electrode
 
 
 %% find correspondence with conductivity values
@@ -126,12 +128,15 @@ cfg.conductivity = cond;
 mesh_tet.tissue = [];
 mesh_tet.tissuelabel = [];
 
-% TODO: add a test to see if orientation is ok (there's a simbio function)
-mesh_tet.tet(:, [3, 4]) = mesh_tet.tet(:, [4, 3]);  % necessary not to get 
+% tic
+try
+    vol = ft_prepare_headmodel(cfg, mesh_tet);
+catch
+    mesh_tet.tet(:, [3, 4]) = mesh_tet.tet(:, [4, 3]);  % necessary not to get 
                                                     % an error from sb_calc_stiff 
                                                     % relative to orientation
-% tic
-vol = ft_prepare_headmodel(cfg, mesh_tet);
+    vol = ft_prepare_headmodel(cfg, mesh_tet);
+end
 toc
 
 
