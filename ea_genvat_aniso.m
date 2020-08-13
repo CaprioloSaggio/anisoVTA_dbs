@@ -1,5 +1,5 @@
 function varargout = ea_genvat_aniso(varargin)
-% this function is called at line 1057 of function ea_stimparams.m in the
+% this function is called at line 1059 of function ea_stimparams.m in the
 % following fashion:
 % [stimparams(1,side).VAT(el).VAT,volume]=feval(ea_genvat,elstruct(el).coords_mm,getappdata(handles.stimfig,'S'),side,options,stimname,options.prefs.machine.vatsettings.horn_ethresh,handles.stimfig);
 % 
@@ -7,7 +7,7 @@ function varargout = ea_genvat_aniso(varargin)
 % TODO: implement saving of the headmodel and the possibility to just load
 %       it in case it is present
 % TODO: check if it's better to run the function in MNI space or in patient
-%       space and understand if the transformations I0m using concern
+%       space and understand if the transformations I'm using concern
 %       patient or MNI space
 %
 
@@ -37,7 +37,7 @@ end
 
 
 %% debug settings
-dbg_vis = 1;
+dbg_vis = 0;
 dbg = 1;
 if dbg; tic; end
 
@@ -101,9 +101,9 @@ end
 
 % compute transformation from general to patient specific electrode model
 % (surface, containing info on insulation or contact)
-[~,~,T,electrode]=ea_buildelfv(elspec,elstruct,side);
+[~,~,T,electrode]=ea_buildelfv(elspec,elstruct,side);  % T should be the transformation between model space and patient space
 
-% load and trnasform volumetric mesh of the electrode (w/o information about 
+% load and transform volumetric mesh of the electrode (w/o information about 
 % insulation or contact)
 elmodel_path=[ea_getearoot,'templates',filesep,'electrode_models',filesep,elspec.matfname,'_vol.mat'];
 elmodel = load(elmodel_path);
@@ -143,7 +143,7 @@ if dbg_vis
 end
 
 
-%% transform the electrode model into patient (MNI?) space
+%% transform the electrode model into patient space
 elmodel.node = T*[elmodel.node, ones(size(elmodel.node,1),1)]';
 elmodel.node = elmodel.node(1:3,:)';
 elmodel.face = elmodel.face + 1;  % here the index starts from 0, while matlab starts from 1
@@ -208,7 +208,7 @@ end
 %% ________________________________________________________________________
 %% BOUNDING CYLINDER (transform)
 
-% transform using the same trnasformation of the electrodes (from voxel to patient space)
+% transform using the same trnnsformation of the electrodes (from model to patient space)
 vol.pos = T*[vol.pos, ones(length(vol.pos), 1)]';
 vol.pos = vol.pos(1:3,:)';
 vol.ctr = T*[vol.ctr, ones(length(vol.ctr), 1)]';
@@ -234,7 +234,8 @@ ea_dispt('Starting FEM headmodel generation...')
 % TODO: here I'm assuming that the normalized and coregistered image is the
 % anat_*.nii, check if it's true
 anat = dir([options.root, options.patientname, filesep, options.prefs.prenii_searchstring]);
-anat = [options.root,options.patientname,filesep,anat(1).name];
+anat = [options.root,options.patientname,filesep,anat(1).name];  % anat is the path to the file called anat_t1.nii in the patient folder
+dti = [options.root,options.patientname,filesep,'dti.nii'];  % dti is the path to the file called dti.nii in the patient folder
 if dbg
     anat = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
 end
@@ -252,7 +253,7 @@ dti = niftiread(dti);
 % build grid from volume 
 mesh_grid.pos = build_grid(mri);
 % ########## Ask for confirmation: I'm using anatomical data to obtain
-% ########## the grid correspondent to the conducitivity data, because
+% ########## the grid correspondent to the conductivity data, because
 % ########## before I've performed coregistration. Is it correct? The size
 % ########## of the 2 images is the same
 
@@ -266,8 +267,8 @@ mesh_grid.ctr = KDTreeSearcher(mesh_grid.pos);
 % run Nearest Neighbours
 % disp('########## Running Nearest Neighbour to find correspondences ##########')
 cond_i = knnsearch(mesh_grid.ctr, vol.ctr); % contains the index of the 
-                                                 % conductivities that have
-                                                 % a match in the mesh                                                
+                                            % conductivities that have
+                                            % a match in the mesh                                                
 
 %% build headmodel
 % load conductivity tensor
@@ -294,12 +295,12 @@ cond = cond_t(cond_i, :);  % TODO: plot the mesh_tet.ctr to see if there is also
 % electrode element to the insulating value of 10^-16 S/m and then I apply the
 % contact conductivity of 10^8 S/m to all the voxels near to the centroid
 % of a contact element.
-cond_contacts = 1e8;  % Salvador et al 2012 states this should be 2 S/m, but here it is transcranial stimulation
+cond_contacts = 1e8;  % Salvador et al 2012 states this should be 2 S/m, but in that case it is transcranial stimulation
 cond_insulation = 1e-16;
 
 el_cond = unique(knnsearch(vol.ctr, elmodel.ctr));  % index of all the elements in cylinder corresponding to 
 cond(el_cond,:) = cond_insulation;  % insulation conductivity (isotropic)
-% el_cond = knnsearch(vol.ctr, elmodel.ctr(contacts.vol,:));  % ########## deprecated ##########
+
 con_cond = unique(knnsearch(vol.ctr, contacts_vertices));
 cond(con_cond,:) = cond_contacts;  % contact conductivity (isotropic)
 
@@ -365,7 +366,8 @@ gradient = cell(length(S.sources), 1);
 
 
 %%
-for source = S.sources
+dpvx = [];
+for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar stimulation, although it was not required by the project #####
     active_contacts = [];
     ix = [];
     voltix = [];
@@ -373,7 +375,7 @@ for source = S.sources
     constvol = stimsource.va==1; % constvol is 1 for constant voltage and 0 for constant current.
     ac = find(S.activecontacts{side});
     U = zeros(length(ac),1);
-    for con = ac
+    for con = ac  
         if S.([sidec,'s',num2str(source)]).amp && S.([sidec,'s',num2str(source)]).(['k',num2str(con+8*(side-1)-1)]).perc  % find active contact corresponding to active source
             %% organize information to feed into the ea_apply_dbs function for potential computation
             
@@ -395,6 +397,9 @@ for source = S.sources
             else
                 U(con)=(stimsource.(cnts{con}).perc/100)*stimsource.amp;
             end
+            
+            dpvx = [dpvx; coords(boolean(U), :)];  % find coordinates where the contacts are active
+
             
             if stimsource.(cnts{con}).pol==1
                 U(con)=U(con)*-1;
@@ -421,8 +426,8 @@ for source = S.sources
     end
 
     
-%% compute potential distribution and gradient
-    if ~(isempty(active_contacts))    
+    %% compute potential distribution and gradient
+    if ~(isempty(active_contacts))
         if any(U>0) 
             unipolar=0;
             U=U/2;
@@ -466,14 +471,13 @@ end
 
 %% ########################################################################
 %% TEMPORARY
-thresh = 1e-8;
+% thresh = 1e-8;
 
 
 %% ________________________________________________________________________
 %% FLOWFIELD VISUALIZATION
 ea_dispt('Calculating quiver field of gradient for display purposes...');
 midpts = vol.ctr;
-dpvx = coords(boolean(U), :);  % find coordinates where the contacts are active
 
 
 %% select subset of points to use for quiver representation
@@ -485,14 +489,14 @@ indices(indices>length(midpts))=[];
 
 
 %% transform to template space if necessary
-if options.native==1 && options.orignative==0 % case if we are visualizing in MNI but want to calc VTA in native space -> now transform back to MNI
+if options.native==1 && options.orignative==0 % case if we are visualizing in MNI but want to calculate VTA in native space -> now transform back to MNI
     c=midpts';
     [~,anatpresent]=ea_assignpretra(options);
-    V=ea_open_vol([options.root,options.patientname,filesep,anatpresent{1}]);
-    c=V.mat\[c;ones(1,size(c,2))];
-    midpts=ea_map_coords(c(1:3,:), ...
+    V=ea_open_vol([options.root,options.patientname,filesep,anatpresent{1}]);  % this function obtains image volume information (header) of the files just found in the previous line
+    c=V.mat\[c;ones(1,size(c,2))];  % V.mat is the pose of the image (wrt patient)
+    midpts=ea_map_coords(c(1:3,:), ...  % Coordinates mapping
         [options.root,options.patientname,filesep,anatpresent{1}], ...
-        [options.root,options.patientname,filesep,'y_ea_inv_normparams.nii'], ...
+        [options.root,options.patientname,filesep,'y_ea_inv_normparams.nii'], ...  % this file are generated by SPM
         '')';
     midpts=midpts(:,1:3);
     options.native=options.orignative; % go back to template space
@@ -533,7 +537,7 @@ setappdata(resultfig,'vatgrad',vatgrad);
 % mesh-connection and setting difference of voltage to these points.
 vat.pos=midpts;
 
-if dbg_vis && exist(c, 'var')
+if dbg_vis && exist('c', 'var')
     figure
     plot3(midpts(:,1),midpts(:,2),midpts(:,3),'b.');
     title('Volume warped to native space')
@@ -567,7 +571,7 @@ if dbg_vis
 
 end
 
-% the following will be used for volume 2 isosurf creation as well as
+% the following will be used for volume-to-isosurf creation as well as
 % volumetrics of the vat in mm^11
 ea_dispt('Calculating interpolant on scattered FEM mesh data...');
 F=scatteredInterpolant(vat.pos(:,1),vat.pos(:,2),vat.pos(:,3),vat.ET','linear','none');
@@ -638,7 +642,7 @@ XYZmax=[max(yg(eg>0)),max(xg(eg>0)),max(zg(eg>0))]; % x and y need to be permute
 try
     radius=ea_pdist([XYZmax;dpvx]);
 catch
-    keyboard
+     keyboard
 end
 
 
@@ -760,7 +764,7 @@ end  % subfunction
 function potential = ea_apply_dbs(vol,elec,val,unipolar,constvol,boundarynodes)
 if constvol
     if unipolar
-        dirinodes = [boundarynodes, elec'];
+        dirinodes = [boundarynodes; elec];
     else
         dirinodes = elec;
     end
