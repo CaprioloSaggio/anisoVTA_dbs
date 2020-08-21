@@ -35,15 +35,21 @@ elseif nargin==1  % in this case I just return the name of the method
     end
 end
 
+clear varargin
+
 
 %% debug settings
+% thresh = 1e-3;
+% thresh = thresh .* 1e3;
 dbg_vis = 0;
-dbg = 1;
+dbg = 0;
 if dbg; tic; end
 
 
 %% ________________________________________________________________________
 %% BOUNDING CYLINDER
+ea_dispt('Building the bounding cylinder...')
+
 if max(S.amplitude{side})>4
     stretchfactor=0.75*(max(S.amplitude{side})/2.5);
 else
@@ -55,13 +61,17 @@ upper_bound = 15+(20*stretchfactor);
 lower_bound = -20*stretchfactor;
 el_o_orig = [0, 0, upper_bound];
 el_o_etop = [0, 0, lower_bound];
-cyltrisize = 0.01;              % the maximum triangle size of the bounding cyl
-cyltetvol = 1;                  % the maximum tetrahedral volume in the mesh --> CRITICAL PARAMETER FOR THE RESOLUTION OF THE FIELD
+cyltrisize = 0.5;                 % maximum triangle size of the bounding cyl
+cyltetvol = 0.1;                  % maximum tetrahedral volume in the mesh --> CRITICAL PARAMETER FOR THE RESOLUTION OF THE FIELD
 cylradius = 40*stretchfactor;   % define the radius of the bounding cylinder
 ndiv=50;                        % division of circle for the bounding cylinder
+% cyltrisize = 1;                 % maximum triangle size of the bounding cyl
+% cyltetvol = 1;                  % maximum tetrahedral volume in the mesh --> CRITICAL PARAMETER FOR THE RESOLUTION OF THE FIELD
+
 
 % define and transform the cylinder, directly obtaining the mesh
 [vol.pos,vol.face,vol.tet]= meshacylinder(el_o_etop,el_o_orig,cylradius,cyltrisize,cyltetvol,ndiv);
+% vol.pos = vol.pos / 1e3;  % convert from mm to m
 vol.tet = vol.tet(:,1:4);  % eliminate last column, that is the one used for homogeneous representation
 vol.ctr = tetctr(vol.pos, vol.tet);
 
@@ -90,6 +100,9 @@ elspec=getappdata(resultfig,'elspec');
 coords=acoords{side};
 setappdata(resultfig,'elstruct',elstruct);
 
+% coords_m{1, 1} = coords_mm{1, 1} / 1e3;  % from mm to m
+% coords_m{1, 2} = coords_mm{1, 2} / 1e3;
+
 % Add stretchfactor to elstruct simply for purpose of checking if headmodel
 % changed. Larger stim amplitudes need larger bounding boxes so
 % stretchfactor must be incorporated here.
@@ -101,7 +114,8 @@ end
 
 % compute transformation from general to patient specific electrode model
 % (surface, containing info on insulation or contact)
-[~,~,T,electrode]=ea_buildelfv(elspec,elstruct,side);  % T should be the transformation between model space and patient space
+[~,~,T,electrode]=ea_buildelfv(elspec,elstruct,side);  % T is the transformation between model space and patient space
+% [elfv,~,T,electrode]=ea_buildelfv(elspec,elstruct,side);
 
 % load and transform volumetric mesh of the electrode (w/o information about 
 % insulation or contact)
@@ -111,14 +125,15 @@ elmodel = load(elmodel_path);
 if dbg_vis
     % old_elmodel = elmodel;
     figure
-    plot3(elmodel.node(:,1), elmodel.node(:,2), elmodel.node(:,3));
+    plot3(elmodel.node(:,1), elmodel.node(:,2), elmodel.node(:,3), 'b.');
 end
 
 
 %% cut the electrode at the size of the bounding cylinder
-outside_bounding_vol = [find(elmodel.node(:,3)>upper_bound); find(elmodel.node(:,3)<lower_bound)];  
-face_outside_bounding_vol = sum(ismember(elmodel.face, outside_bounding_vol), 2);  % find faces with at least one node out of the boundaries
-elmodel.face(face_outside_bounding_vol>0,:) = [];  % eliminate faces with nodes out of the boundaries
+% ########## deprecated ##########
+% outside_bounding_vol = [find(elmodel.node(:,3)>upper_bound); find(elmodel.node(:,3)<lower_bound)];  
+% face_outside_bounding_vol = sum(ismember(elmodel.face, outside_bounding_vol), 2);  % find faces with at least one node out of the boundaries
+% elmodel.face(face_outside_bounding_vol>0,:) = [];  % eliminate faces with nodes out of the boundaries
 % it is unnecessarily complicated to remove also the unused nodes, so I leave
 % them there, this way the correspondence with the elmodel.face indices is
 % maintained
@@ -128,6 +143,8 @@ elmodel.face(face_outside_bounding_vol>0,:) = [];  % eliminate faces with nodes 
 % solution doesn't look to return the correct result
 % inside_bounding_vol = inpolyhedron(vol.tet, vol.pos, elmodel.node(:,1), elmodel.node(:,2), elmodel.node(:,3));  % it tells me I'm testing too many points and (39371) and it can make MATLAB crash
 
+elmodel.node(elmodel.node(:,3)>upper_bound | elmodel.node(:,3)<lower_bound, :) = [];
+
 % ########## deprecated ##########
 % inside_bounding_vol = find(elmodel.node((elmodel.node(:,3)<15+20*stretchfactor) & (-20*stretchfactor<elmodel.node(:,3))));  
 % f_inside_bounding_vol = sum(~ismember(elmodel.face, inside_bounding_vol), 2);  % find faces with nodes out of the boundaries
@@ -135,9 +152,10 @@ elmodel.face(face_outside_bounding_vol>0,:) = [];  % eliminate faces with nodes 
 % % elmodel.node = elmodel.node(inside_bounding_vol,:);  % keep only nodes inside the boundary
 
 if dbg_vis
-    elmodel.ctr = tetctr(elmodel.node, elmodel.face+1);  % find the centroids of the electrode elements
+%     elmodel.ctr = tetctr(elmodel.node, elmodel.face+1);  % find the centroids of the electrode elements
     figure
-    plot3(elmodel.ctr(:,1), elmodel.ctr(:,2), elmodel.ctr(:,3), 'bx');
+    plot3(elmodel.node(:,1), elmodel.node(:,2), elmodel.node(:,3), 'bx');
+%     plot3(elmodel.ctr(:,1), elmodel.ctr(:,2), elmodel.ctr(:,3), 'bx');
     hold on
     plot3(vol.pos(:,1), vol.pos(:,2), vol.pos(:,3), 'ro')
 end
@@ -146,8 +164,9 @@ end
 %% transform the electrode model into patient space
 elmodel.node = T*[elmodel.node, ones(size(elmodel.node,1),1)]';
 elmodel.node = elmodel.node(1:3,:)';
-elmodel.face = elmodel.face + 1;  % here the index starts from 0, while matlab starts from 1
-elmodel.ctr = tetctr(elmodel.node, elmodel.face);  % find the centroids of the electrode elements
+% elmodel.face = elmodel.face + 1;  % here the index starts from 0, while matlab starts from 1
+% elmodel.ctr = tetctr(elmodel.node, elmodel.face);  % find the centroids
+% of the electrode elements  % ##### 
 
 % I don't need to take into account the insulation, since I can put the
 % all electrode at insulating conductivity and then apply the mask only for
@@ -190,9 +209,9 @@ end
 % it is modelled assuming it as a 0.5mm thick layer around the whole length of
 % the electrode lead
 vol.r = vecnorm(vol.ctr(:,1:2)')';  % find radial distance of each point in the bounding cylinder from the center of the electrode
-elrad = elspec.lead_diameter / 2;  % find radius of the electrode lead
+elrad = elspec.lead_diameter / 2 + 0.5;  % find radius of the electrode lead
 encapsulation_thickness = 0.5;  % 0.5 mm according to Gunalan et al 2017
-encaps_index = find(vol.r>elrad & vol.r<(elrad+encapsulation_thickness));  % find all elements in the cylinder mesh that correspond to encapsulation tissue
+encaps_index = find(vol.r>elrad & vol.r<(elrad+encapsulation_thickness) & vol.ctr(:,3)>min(contacts_vertices(:,3)));  % find all elements in the cylinder mesh that correspond to encapsulation tissue
 
 if dbg_vis
     encaps_ctr = vol.ctr(vol.r<(elrad+encapsulation_thickness) & vol.r>elrad, :);
@@ -200,15 +219,14 @@ if dbg_vis
     plot3(vol.ctr(:,1), vol.ctr(:,2), vol.ctr(:,3), 'r.')
     hold on
     plot3(encaps_ctr(:,1), encaps_ctr(:,2), encaps_ctr(:,3), 'b.')
-    legend('bounding cylinder nodes', 'fibrotic tissue nodes', 'location', 'northeast')
+    legend('cylindrical volume nodes', 'fibrotic tissue nodes', 'location', 'northeast')
     title('encapsulation layer')
 end
 
 
 %% ________________________________________________________________________
 %% BOUNDING CYLINDER (transform)
-
-% transform using the same trnnsformation of the electrodes (from model to patient space)
+% transform using the same transformation of the electrodes (from model to patient space)
 vol.pos = T*[vol.pos, ones(length(vol.pos), 1)]';
 vol.pos = vol.pos(1:3,:)';
 vol.ctr = T*[vol.ctr, ones(length(vol.ctr), 1)]';
@@ -220,7 +238,7 @@ if dbg_vis
     plot3(vol.pos(:,1),vol.pos(:,2),vol.pos(:,3),'r*');
     hold on
     plot3(contacts_vertices(:,1), contacts_vertices(:,2), contacts_vertices(:,3), 'bo')
-    plot3(elmodel.ctr(:,1),elmodel.ctr(:,2),elmodel.ctr(:,3),'g.');
+    plot3(elmodel.node(:,1),elmodel.node(:,2),elmodel.node(:,3),'g.');
 end
 
 
@@ -234,17 +252,16 @@ ea_dispt('Starting FEM headmodel generation...')
 % TODO: here I'm assuming that the normalized and coregistered image is the
 % anat_*.nii, check if it's true
 anat = dir([options.root, options.patientname, filesep, options.prefs.prenii_searchstring]);
-anat = [options.root,options.patientname,filesep,anat(1).name];  % anat is the path to the file called anat_t1.nii in the patient folder
-dti = [options.root,options.patientname,filesep,'dti.nii'];  % dti is the path to the file called dti.nii in the patient folder
+anat = [options.root,options.patientname,filesep,'r_',anat(1).name];  % anat is the path to the file called anat_t1.nii in the patient folder
+dti = [options.root,options.patientname,filesep,'dti_tensor.nii'];  % dti is the path to the file called dti.nii in the patient folder
 if dbg
     anat = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
+    dti = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\dti_tensor.nii';
 end
-% insert here the path of the diffusion tensor
-dti = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\dti_tensor.nii';
 
 
 %% read image
-ea_dispt('Reading image...')
+ea_dispt('Reading images...')
 mri = MRIread(anat);  % using this FreeSurfer function I also directly extract the transformation from voxel space to patient space
 dti = niftiread(dti);
 
@@ -252,10 +269,6 @@ dti = niftiread(dti);
 %% build the grid of points corresponding to the voxels of the volume
 % build grid from volume 
 mesh_grid.pos = build_grid(mri);
-% ########## Ask for confirmation: I'm using anatomical data to obtain
-% ########## the grid correspondent to the conductivity data, because
-% ########## before I've performed coregistration. Is it correct? The size
-% ########## of the 2 images is the same
 
 
 %% find correspondence with conductivity values
@@ -275,8 +288,9 @@ cond_i = knnsearch(mesh_grid.ctr, vol.ctr); % contains the index of the
 % load('C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_cond.mat')
 
 % get the diffusion data and convert them to conduction data
-r_cond = abs(dti) * 0.736;  % McIntyre et al 2004
-r_cond = r_cond * 1e3;  % from S/mm to S/m
+% r_cond = abs(dti) * 0.736;  % S*s/mm^2, McIntyre et al 2004
+r_cond = abs(dti - 0.124e-6) * 0.844;  % S*s/mm^2, Tuch et al 2001
+% r_cond = r_cond * 1e3;  % from S/mm to S/m
 
 % rearrange conductivity tensor
 npnt = size(r_cond);
@@ -287,18 +301,22 @@ for i=1:6
 end
 
 % select only the conductivities that match elements in the tetrahedral mesh
-cond = cond_t(cond_i, :);  % TODO: plot the mesh_tet.ctr to see if there is also background
+cond = cond_t(cond_i, :);
 
+clear cond3d cond_t
 
 %% find correspondence with electrodes and include them into the model
 % I set the conductivity of all voxels being close to the centroid of an
 % electrode element to the insulating value of 10^-16 S/m and then I apply the
 % contact conductivity of 10^8 S/m to all the voxels near to the centroid
 % of a contact element.
-cond_contacts = 1e8;  % Salvador et al 2012 states this should be 2 S/m, but in that case it is transcranial stimulation
-cond_insulation = 1e-16;
+% cond_contacts = 1e8;  % Salvador et al 2012 states this should be 2 S/m, but in that case it is transcranial stimulation
+cond_contacts = 1e5;  % in S/mm
+% cond_insulation = 1e-16;
+cond_insulation = 1e-19;  % in S/mm
 
-el_cond = unique(knnsearch(vol.ctr, elmodel.ctr));  % index of all the elements in cylinder corresponding to 
+% el_cond = unique(knnsearch(vol.ctr, elmodel.ctr));
+el_cond = unique(knnsearch(vol.ctr, elmodel.node));  % index of all the elements in cylinder corresponding to electrode contacts
 cond(el_cond,:) = cond_insulation;  % insulation conductivity (isotropic)
 
 con_cond = unique(knnsearch(vol.ctr, contacts_vertices));
@@ -306,8 +324,18 @@ cond(con_cond,:) = cond_contacts;  % contact conductivity (isotropic)
 
 
 %% add encapsulation layer (fibrotic tissue forming around the electrodes)
-cond_encapsulation = 0.07;  % found in "isotropic conductivities", but according to Gunalan et al 2017 it can be 0.05±0.2 S/m
+cond_encapsulation = 0.07 * 1e-3;  % found in "isotropic conductivities", but according to Gunalan et al 2017 it can be 0.05±0.2 S/m
 cond(encaps_index,:) = cond_encapsulation; %#ok<FNDSB>
+
+if dbg_vis
+    figure; 
+    plot3(vol.ctr(el_cond,1), vol.ctr(el_cond,2), vol.ctr(el_cond,3), 'b.')
+    hold on
+    plot3(vol.ctr(con_cond,1), vol.ctr(con_cond,2), vol.ctr(con_cond,3), 'g.')
+    plot3(vol.ctr(encaps_index,1), vol.ctr(encaps_index,2), vol.ctr(encaps_index,3), 'r.')
+    title('non-DTI nodes')
+    legend('insulation', 'contact', 'scar tissue', 'location', 'northwest')
+end
 
 
 %% ________________________________________________________________________
@@ -321,12 +349,37 @@ try
     vol.stiff = simbio_stiff_matrix(cond, vol);
 catch
     vol.tet(:, [3, 4]) = vol.tet(:, [4, 3]);  % necessary not to get 
-                                                        % an error from sb_calc_stiff 
-                                                        % relative to orientation
+                                              % an error from sb_calc_stiff 
+                                              % relative to orientation
     vol.stiff = simbio_stiff_matrix(cond, vol);
 end
 vol.type = 'simbio';
-vol.stiff = abs(vol.stiff);  % TODO: check it, I had to add this line in order to make ea_apply_dbs execute ichol
+% vol.stiff = abs(vol.stiff);
+
+% check if the stiffness matrix has all the elements in the diagonal
+% positive, and in case, substitute null values with a very small one for
+% the sake of solvability of the Cholesky factorization during potential
+% computation. Similar approach with negative values on the diagonal, that
+% are considered in their absolute value.
+null_diag_stiff = find(diag(vol.stiff)==0);
+try
+    vol.stiff(null_diag_stiff, null_diag_stiff) = eps;
+catch
+    for i=1:length(null_diag_stiff)     % I had to arrange the check this way, 
+        j = null_diag_stiff(i);         % because sometimes MATLAB gives  
+        vol.stiff(j,j) = eps;           % problems of memory outage with 8GB 
+    end                                 % RAM
+end
+
+negative_diag_stiff = find(diag(vol.stiff)<0);
+try
+    vol.stiff(negative_diag_stiff,negative_diag_stiff) = abs(vol.stiff(negative_diag_stiff,negative_diag_stiff));
+catch
+    for i=1:length(negative_diag_stiff)                 % I had to arrange the check this way, 
+        j = negative_diag_stiff(i);                     % otherwise MATLAB gives problems of 
+        vol.stiff(j,j) = abs(vol.stiff(j,j));           % memory outage with 8GB RAM
+    end
+end
 
 
 %% ________________________________________________________________________
@@ -367,7 +420,7 @@ gradient = cell(length(S.sources), 1);
 
 %%
 dpvx = [];
-for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar stimulation, although it was not required by the project #####
+for source = S.sources  % ##### TODO: check if this block allows for multipolar stimulation, although it was not required by the project #####
     active_contacts = [];
     ix = [];
     voltix = [];
@@ -384,7 +437,8 @@ for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar 
 
             % find elements in mesh corresponding to nodes of the active
             % contact in scope
-            vol.active = unique(knnsearch(vol.pos, active_contacts));  % be careful to if they leave a gap in between. In case maybe it is detrimental
+            vol.active = unique(knnsearch(vol.pos, active_contacts));  % be careful to if they leave a gap in between. In case, maybe it is detrimental
+%             vol.active = unique(knnsearch(vol.pos, elfv(con).vertices));
             
             % define the activeidx structure, that organizes the
             % information for stimulation in a way that fits ea_apply_dbs
@@ -397,13 +451,12 @@ for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar 
             else
                 U(con)=(stimsource.(cnts{con}).perc/100)*stimsource.amp;
             end
-            
-            dpvx = [dpvx; coords(boolean(U), :)];  % find coordinates where the contacts are active
 
-            
             if stimsource.(cnts{con}).pol==1
                 U(con)=U(con)*-1;
             end
+            
+            dpvx = [dpvx; coords(boolean(U), :)];  % find coordinates where the contacts are active
             
             ix = [ix;activeidx(source).con(con).ix]; %#ok<*AGROW>
             voltix_new = [repmat(U(con), length(activeidx(source).con(con).ix), 1), ...
@@ -440,7 +493,7 @@ for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar 
 
 
         %% get high EF values for active electrodes
-        % this can be adjusted by assigning all tetrahedar belonging to the
+        % this can be adjusted by assigning all the tetrahedra belonging to the
         % active electrode a new value: gradient{source}(elec_tet_ix,:) = new_value;
         elec_tet_ix = sub2ind(size(vol.pos), vertcat(ix,ix,ix), vertcat(ones(length(ix),1), ones(length(ix),1).*2, ones(length(ix),1).*3));
         elec_tet_ix = find(sum(ismember(vol.tet,elec_tet_ix),2)==4);
@@ -456,12 +509,13 @@ for source = S.sources  % ##### PAY ATTENTION: this block allows for multipolar 
         gradient{source} = zeros(size(vol.tet,1),3);
     end
 end
+clear voltix_new
 
 % combine gradients from all sources
 gradient=gradient{1}+gradient{2}+gradient{3}+gradient{4}; 
 
 % convert back to mm
-vol.pos=vol.pos*1000; 
+% vol.pos=vol.pos*1000; 
 
 vatgrad=getappdata(resultfig,'vatgrad');
 if isempty(vatgrad)
@@ -469,21 +523,24 @@ if isempty(vatgrad)
 end
 
 
-%% ########################################################################
-%% TEMPORARY
-% thresh = 1e-8;
-
-
 %% ________________________________________________________________________
 %% FLOWFIELD VISUALIZATION
 ea_dispt('Calculating quiver field of gradient for display purposes...');
 midpts = vol.ctr;
 
+if dbg_vis
+    figure
+    quiver3(midpts(:,1),midpts(:,2),midpts(:,3),gradient(:,1),gradient(:,2),gradient(:,3))
+    title('quiver field')
+end
+
 
 %% select subset of points to use for quiver representation
 reduc=10;
-indices = (1:reduc:length(midpts) + round(randn(1)*(reduc/3)))';
+indices = (1:reduc:length(midpts) + round(randn*(reduc/3)))';
 indices=unique(indices(2:end-1));
+% in order to have non-biased representation a component of randomness has
+% been added. This requires the interventions of the following lines
 indices(indices==0)=[];
 indices(indices>length(midpts))=[];
 
@@ -502,31 +559,34 @@ if options.native==1 && options.orignative==0 % case if we are visualizing in MN
     options.native=options.orignative; % go back to template space
 end
 
-if dbg_vis
+if dbg_vis && exist('c', 'var')
     figure
-    quiver3(midpts(:,1),midpts(:,2),midpts(:,3),gradient(:,1),gradient(:,2),gradient(:,3))
-    title('quiver field')
+    plot3(midpts(:,1),midpts(:,2),midpts(:,3),'b.');
+    title('Volume warped to native space')
 end
 
 
 %% compute normalized gradient
 % define midpoints of quiver field
-vatgrad(side).x=midpts(indices,1); vatgrad(side).y=midpts(indices,2); vatgrad(side).z=midpts(indices,3);
+vatgrad(side).x=midpts(indices,1); 
+vatgrad(side).y=midpts(indices,2); 
+vatgrad(side).z=midpts(indices,3);
 
 gradvis=gradient(indices,:);  % subsample gradient
-mag_gradvis=sqrt(sum(gradvis'.^2,1))';  % obtain magnitude of the gradient
+mag_gradvis=sqrt(sum(gradvis'.^2,1))';  % obtain magnitude of the gradient (remember that here you are loosing one dimension, with a length of 3)
 nmag_gradvis=mag_gradvis;  % copy to get normalized version
 nmag_gradvis(nmag_gradvis>thresh)=thresh;
-
-nmag_gradvis(nmag_gradvis>thresh)=1;  % TEMPORARY: to check visualization (then just DELETE THIS LINE)
 
 nmag_gradvis=(nmag_gradvis-min(nmag_gradvis(:)))/max(nmag_gradvis-min(nmag_gradvis(:)));  % norm from 1 - 0
 nmag_gradvis=nmag_gradvis/5; % largest grad vector will be 1/50 mm long
 
 % apply scaling to gradvis
-gradvis=gradvis.*repmat(nmag_gradvis,1,3);
+gradvis=gradvis.*repmat(nmag_gradvis,1,3);  % make 3 copies in a column of the nmag_gradvis array in order to make sizes match (in the end the size is 3xN)
 gradvis=gradvis./repmat(mag_gradvis,1,3);
-vatgrad(side).qx=gradvis(:,1); vatgrad(side).qy=gradvis(:,2); vatgrad(side).qz=gradvis(:,3);
+
+vatgrad(side).qx=gradvis(:,1); 
+vatgrad(side).qy=gradvis(:,2); 
+vatgrad(side).qz=gradvis(:,3);
 
 % share normalized gradient with the workflow
 setappdata(resultfig,'vatgrad',vatgrad);
@@ -536,29 +596,19 @@ setappdata(resultfig,'vatgrad',vatgrad);
 % calculate electric field ET by calculating midpoints of each
 % mesh-connection and setting difference of voltage to these points.
 vat.pos=midpts;
-
-if dbg_vis && exist('c', 'var')
-    figure
-    plot3(midpts(:,1),midpts(:,2),midpts(:,3),'b.');
-    title('Volume warped to native space')
-end
-
 vat.ET = sqrt(sum(gradient'.^2,1)); % vol.cond.*sqrt(sum(gradient'.^2,1)); would be stromstaerke (=> magnitude).
 
-% remove electrode nodes from VAT if specified in the options
-if options.prefs.machine.vatsettings.horn_removeElectrode
-    where_electrode = unique(vol.tet(el_cond,:));
-    vat.pos(where_electrode,:) = [];
-    vat.ET(where_electrode) = [];
-end
+% remove electrode nodes from VAT
+where_electrode = unique(vol.tet(el_cond,:));
+vat.pos(where_electrode,:) = [];
+vat.ET(where_electrode) = [];
 
 ea_dispt('Preparing VAT...');
 vat.tET=vat.ET>thresh;
 vat.tpos=vat.pos(vat.tET,:);
-% nvat.tpos=nvat.pos(vat.tET,:);
 outliers=ea_removeoutliers(vat.tpos,mean(dpvx,1),voltix,constvol);
 vat.tpos(outliers,:)=[];
-% nvat.tpos(outliers,:)=[];
+
 if dbg_vis
     figure, plot3(vat.tpos(:,1),vat.tpos(:,2),vat.tpos(:,3),'r.');
     [~,trajectory,~,~,~,~]=ea_load_reconstruction(options);
@@ -575,6 +625,10 @@ end
 % volumetrics of the vat in mm^11
 ea_dispt('Calculating interpolant on scattered FEM mesh data...');
 F=scatteredInterpolant(vat.pos(:,1),vat.pos(:,2),vat.pos(:,3),vat.ET','linear','none');
+% F = scatteredInterpolant(x, y, z, v, 'linear', 'extrapolation_method') 
+% creates an interpolant that fits a surface of the form v = F(x, y, z)
+% using a 'linear' (or alternative method) interpolation and the specified
+% extrapolation method for query points outside the convex hull
 
 
 %% convert to equispaced image
@@ -638,11 +692,12 @@ neeg(~isnan(neeg))=neeg(~isnan(neeg))/sum(neeg(~isnan(neeg))); % 0-1 distributed
 
 [xg,yg,zg] = meshgrid(gv{1},gv{2},gv{3});
 
-XYZmax=[max(yg(eg>0)),max(xg(eg>0)),max(zg(eg>0))]; % x and y need to be permuted here (should be correct but wouldnt matter anyways since only serves to calc radius)
+XYZmax=[max(yg(eg>0)),max(xg(eg>0)),max(zg(eg>0))]; % x and y need to be permuted here (should be correct but wouldn't matter anyways since only serves to calc radius)
 try
     radius=ea_pdist([XYZmax;dpvx]);
 catch
-     keyboard
+    radius=0;
+    keyboard
 end
 
 
@@ -712,6 +767,7 @@ catch
         warndlg('Patch could not be smoothed. Please supply a compatible Matlab compiler to smooth VTAs.');
     end
 end
+
 % new save by Till to save VAT and quiver in seperate .mat-file for quick
 % visualization
 switch side
@@ -787,7 +843,6 @@ else
         elec_center_id = ea_find_elec_center(elec,vol.pos);
         rhs(elec_center_id) = val(1,1);
     else
-
         for v=1:length(uvals)
             elec_center_id = ea_find_elec_center(elec(val(:,2)==uvals(v)),vol.pos);
             thesevals=val(val(:,2)==uvals(v),1);
@@ -818,7 +873,7 @@ end  % subfunction
 
 
 
-function [stiff,rhs] = ea_dbs(stiff,rhs,dirinodes,dirival)
+function [stiff,rhs] = ea_dbs(stiff,rhs,dirinodes,dirival)  % for later steps stiff in output must be positive definite, i.e. for any vector x, xAx'>0
 
 diagonal = diag(stiff);
 stiff = stiff + stiff';
