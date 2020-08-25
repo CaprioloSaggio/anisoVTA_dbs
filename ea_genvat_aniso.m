@@ -252,8 +252,8 @@ ea_dispt('Starting FEM headmodel generation...')
 % TODO: here I'm assuming that the normalized and coregistered image is the
 % anat_*.nii, check if it's true
 anat = dir([options.root, options.patientname, filesep, options.prefs.prenii_searchstring]);
-anat = [options.root,options.patientname,filesep,'r_',anat(1).name];  % anat is the path to the file called anat_t1.nii in the patient folder
-dti = [options.root,options.patientname,filesep,'dti_tensor.nii'];  % dti is the path to the file called dti.nii in the patient folder
+anat = [options.root,options.patientname,filesep,anat(1).name];  % anat is the path to the file called anat_t1.nii in the patient folder
+dti = [options.root,options.patientname,filesep,'r_dti_tensor.nii'];  % dti is the path to the file called dti.nii in the patient folder
 if dbg
     anat = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\r_anat_t1_tra.nii';
     dti = 'C:\Users\Notebook\Desktop\Downloads\DBS\03_Data\DICOM_raw_Alba\fsl_analyses\dti_tensor.nii';
@@ -262,7 +262,8 @@ end
 
 %% read image
 ea_dispt('Reading images...')
-mri = MRIread(anat);  % using this FreeSurfer function I also directly extract the transformation from voxel space to patient space
+% mri = MRIread(anat);  % using this FreeSurfer function I also directly extract the transformation from voxel space to patient space
+mri = ea_load_nii(anat);
 dti = niftiread(dti);
 
 
@@ -319,7 +320,8 @@ cond_insulation = 1e-19;  % in S/mm
 el_cond = unique(knnsearch(vol.ctr, elmodel.node));  % index of all the elements in cylinder corresponding to electrode contacts
 cond(el_cond,:) = cond_insulation;  % insulation conductivity (isotropic)
 
-con_cond = unique(knnsearch(vol.ctr, contacts_vertices));
+% con_cond = unique(knnsearch(vol.ctr, contacts_vertices));  % ##### original
+con_cond = unique(knnsearch(vol.pos, contacts_vertices));  % #####
 cond(con_cond,:) = cond_contacts;  % contact conductivity (isotropic)
 
 
@@ -437,8 +439,10 @@ for source = S.sources  % ##### TODO: check if this block allows for multipolar 
 
             % find elements in mesh corresponding to nodes of the active
             % contact in scope
-            vol.active = unique(knnsearch(vol.pos, active_contacts));  % be careful to if they leave a gap in between. In case, maybe it is detrimental
+%             vol.active = unique(knnsearch(vol.ctr, active_contacts));  % ##### original
+            vol.active = unique(knnsearch(vol.pos, active_contacts));  % #####
 %             vol.active = unique(knnsearch(vol.pos, elfv(con).vertices));
+%             vol.active = con_cond;  % #####
             
             % define the activeidx structure, that organizes the
             % information for stimulation in a way that fits ea_apply_dbs
@@ -840,11 +844,13 @@ else
     rhs = zeros(size(vol.pos,1),1);
     uvals=unique(val(:,2));
     if unipolar && length(uvals)==1
-        elec_center_id = ea_find_elec_center(elec,vol.pos);
+        elec_center_id = ea_find_elec_center(elec,vol.pos);  % ##### original
+%         elec_center_id = ea_find_elec_center(elec,vol.ctr);  % #####
         rhs(elec_center_id) = val(1,1);
     else
         for v=1:length(uvals)
-            elec_center_id = ea_find_elec_center(elec(val(:,2)==uvals(v)),vol.pos);
+            elec_center_id = ea_find_elec_center(elec(val(:,2)==uvals(v)),vol.pos);  % ##### original
+%             elec_center_id = ea_find_elec_center(elec(val(:,2)==uvals(v)),vol.ctr);  % #####
             thesevals=val(val(:,2)==uvals(v),1);
             rhs(elec_center_id) = thesevals(1);
         end
