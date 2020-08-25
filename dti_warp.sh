@@ -7,7 +7,8 @@ mv vol0000.nii.gz b0.nii.gz
 mrconvert b0.nii.gz b0.nii
 rm b0.nii.gz
 
-echo "Selecting a subpart of them, including a b0"
+echo ""
+echo "Selecting a subsample of the 3D volumes, including a b0"
 for i in {2..7}
 do
 VOLIN="vol000${i}.nii.gz";
@@ -19,10 +20,12 @@ done
 rm vol*
 rm *.gz
 
-echo "Coregistering b0 to anatomical image ans saving the transformation"
+echo ""
+echo "Coregistering b0 to anatomical image and saving the transformation"
 flirt -in b0.nii -ref anat_t1.nii -out r_b0.nii -omat dti2anat.mat -dof 12
 mrconvert r_b0.nii.gz r_b0.nii
 
+echo ""
 echo "Applying coregistration to all the considered diffusion-weighted volumes"
 for i in {2..7}
 do
@@ -33,10 +36,12 @@ mrconvert "${NIIOUT}.gz" $NIIOUT
 done
 rm *.gz
 
+echo ""
 echo "Merging the volumes"
 fslmerge -t r_dti r_b0.nii r_dti*
 mrconvert r_dti.nii.gz r_dti.nii
 
+echo ""
 echo "Computing diffusion tensor"
 fslmaths r_dti.nii -Tmean r_dti_m.nii
 bet r_dti_m.nii r_dti_brain -m
