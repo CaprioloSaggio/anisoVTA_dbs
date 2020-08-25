@@ -15,7 +15,7 @@ MRTRIX
 ____________________________________________________________________________________
 The following steps regard a single acquisition (b0_PA in this case), but it 
 needs to be performed on all of them (dti_data, b0_AP or b0_PA). Thereafter, 
-all the final outputs have to be moved (cp [options] source destination)to 
+all the final outputs have to be moved (cp [options] source destination) to 
 the main preprocessing folder to procede with fsl.
 
 -convert from dicom to .mif (mrconvert from_file to_file):
@@ -49,7 +49,7 @@ $ fslmerge -t b0_AP_PA.nii dti_data_b0_AP.nii dti_data_b0_PA.nii
 -draft the acqparams.txt file to feed into topup (https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/topup/Faq).
  In order to get information about the phase encoding direction and total readout 
  time of an image, type the following command:
-$ mrinfo /mnt/c/Users/\Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/0000AE39/results__/dti_raw.mif
+$ mrinfo /mnt/c/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/0000AE39/results__/dti_raw.mif
 
 -run topup to correct for off-resonance field distortions:
 $ topup --imain=b0_AP_PA.nii.gz --datain=acqparams6.txt --config=b02b0.cnf --out=topup/topup_ --fout=field --iout=unwarped_dti
@@ -59,8 +59,8 @@ $ topup --imain=b0_AP_PA.nii.gz --datain=acqparams6.txt --config=b02b0.cnf --out
 $ fslmaths unwarped_dti -Tmean unwarped_dti_m
 $ bet unwarped_dti_m unwarped_dti_brain -m
 
--create an index file that tells eddy which line/of the lines in the acqparams.txt 
- file that are relevant for the data passed into eddy (in my case all the dti 
+-create an index file that tells eddy which of the lines in the acqparams.txt 
+ file are relevant for the data passed into eddy (in my case all the dti 
  volumes are acquired A>>P, so the first line describe them all):
 $ indx=""
 $ for ((i=1; i<=64; i+=1)); do indx="$indx 1"; done
@@ -82,12 +82,13 @@ $ eddy_openmp --imain=dti_data_all.nii --mask=unwarped_dti_brain_mask --acqp=acq
 $ eddy_quad eddy_corrected_data -idx index.txt -par acqparams6.txt -m unwarped_dti_brain_mask -b bvals
 
 # DIFFUSION TENSOR EXTRACTION
--run dtifit in order to obtain the DTI of the image:
-$ dtifit --data=eddy_corrected_data.nii --mask=unwarped_dti_brain_mask --bvecs=bvecs --bvals=bvals --save_tensor --out=dti (**)
+-run dtifit in order to obtain the DTI of the image (**) and then uncompress the tensor file:
+$ dtifit --data=eddy_corrected_data.nii --mask=unwarped_dti_brain_mask --bvecs=bvecs --bvals=bvals --save_tensor --out=dti 
+$ mrconvert dti_tensor.nii.gz dti_tensor.nii
 
 # COREGISTRATION
 -run flirt to perform coregistration
-$ flirt -in anat_t1_tra.nii -ref dti_data_b0_AP.nii -out r_anat_t1_tra.nii -omat anat2epi.mat -dof 12
+$ flirt -in anat_t1_tra.nii -ref dti_data_b0_AP.nii -out r_anat_t1_tra.nii -omat anat2epi.txt -dof 12
 $ mrconvert r_anat_t1_tra.nii.gz r_anat_t1_tra.nii
 
 -oder: epi_reg is optimized for the case of EPI-to-anatomical coregistration (to be checked)
