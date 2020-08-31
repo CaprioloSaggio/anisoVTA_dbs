@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo ""
 echo "Splitting 4D image in 3D volumes"
 fslsplit dti.nii
 
@@ -38,13 +39,21 @@ rm *.gz
 
 echo ""
 echo "Merging the volumes"
-fslmerge -t r_dti r_b0.nii r_dti*
-mrconvert r_dti.nii.gz r_dti.nii
+fslmerge -t r_dti_biased r_b0.nii r_dti*
+mrconvert r_dti_biased.nii.gz r_dti_biased.nii
+
+echo ""
+echo "Removing bias"
+fslmaths r_dti_biased.nii -Tmean r_dti_m.nii
+bet r_dti_m.nii r_dti_brain -m
+mrconvert r_dti_brain_mask.nii.gz r_dti_brain_mask.mif
+mrconvert r_dti_biased.nii r_dti_biased.mif
+# dwibiascorrect ants r_dti_biased.mif r_dti.mif -mask r_dti_brain_mask.mif -fslgrad bvecs_short bvals_short -ants.b [100,3] -ants.c [1000,0.0] -ants.s 4
+dwibiascorrect fsl r_dti_biased.mif r_dti.mif -fslgrad bvecs_short bvals_short -mask r_dti_brain_mask.mif
+mrconvert r_dti.mif r_dti.nii
 
 echo ""
 echo "Computing diffusion tensor"
-fslmaths r_dti.nii -Tmean r_dti_m.nii
-bet r_dti_m.nii r_dti_brain -m
 dtifit --data=r_dti.nii --mask=r_dti_brain_mask --bvecs=bvecs_short --bvals=bvals_short --save_tensor --out=dti
 mrconvert dti_tensor.nii.gz dti_tensor.nii
 

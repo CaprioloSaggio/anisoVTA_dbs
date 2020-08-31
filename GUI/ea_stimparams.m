@@ -2185,6 +2185,13 @@ end
 %end
 
 switch model
+    case 'Anisotropic'
+        ea_hide_impedance(handles);
+        set(handles.estimateInTemplate,'Visible','off');
+        S.monopolarmodel=0;
+        ea_enable_vas(handles,options);
+        set(handles.betawarning,'visible','off');
+        set(handles.settings,'visible','on');
     case 'SimBio/FieldTrip (see Horn 2017)'
         ea_hide_impedance(handles);
         set(handles.estimateInTemplate,'Visible','on');
@@ -3233,6 +3240,8 @@ catch
     model=models{1};
 end
 switch model
+    case 'Anisotropic'
+        ea_vatsettings_aniso;
     case 'SimBio/FieldTrip (see Horn 2017)'
         ea_vatsettings_horn;
     case 'Dembek 2017'

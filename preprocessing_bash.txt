@@ -7,7 +7,7 @@
 INTRO
 ___________________________________________________________________________________
 -find the correct directory
-$ cd /mnt/c/Users/Notebook/Desktop/Downloads/DBS/03_Data/DICOM_raw_Alba/DICOM/
+$ cd /mnt/c/Users/Notebook/Desktop/Downloads/DBS/03_Data/28_august_WF
 
 
 
@@ -19,9 +19,9 @@ all the final outputs have to be moved (cp [options] source destination) to
 the main preprocessing folder to procede with fsl.
 
 -convert from dicom to .mif (mrconvert from_file to_file):
-$ mrconvert 000045E9 000045E9/results/dti_raw.mif
+$ mrconvert 0000634F dti_raw.mif
 -oder (mit b0 und b1250 zusammen):
-$ mrconvert dwi_data_AP dwi_data_AP/results/dti_raw.mif
+$ mrconvert dwi_data_AP dwi_data_AP/dti_raw.mif
 
 -export bvecs and bvals as text files from images:
 $ mrinfo dti_raw.mif -export_grad_fsl bvecs bvals
@@ -37,7 +37,7 @@ $ mrdegibbs dti_den.mif dti_den_unr.mif -axes 0,1
 $ mrconvert dti_den_unr.mif dti_data.nii
 
 -copy file in the right folder
-$ cp 0000AE39/results__/dti_data.nii ../fsl_analyses/dti_data_b0_PA.nii
+$ cp 0000AE39/dti_data.nii ../fsl_analyses/dti_data_b0_PA.nii
 
 
 
@@ -81,21 +81,22 @@ $ eddy_openmp --imain=dti_data_all.nii --mask=unwarped_dti_brain_mask --acqp=acq
 -OPTIONAL: perform quality control on a single subject:
 $ eddy_quad eddy_corrected_data -idx index.txt -par acqparams6.txt -m unwarped_dti_brain_mask -b bvals
 
-# DIFFUSION TENSOR EXTRACTION
--run dtifit in order to obtain the DTI of the image (**) and then uncompress the tensor file:
-$ dtifit --data=eddy_corrected_data.nii --mask=unwarped_dti_brain_mask --bvecs=bvecs --bvals=bvals --save_tensor --out=dti 
-$ mrconvert dti_tensor.nii.gz dti_tensor.nii
 
-# COREGISTRATION
--run flirt to perform coregistration
-$ flirt -in anat_t1_tra.nii -ref dti_data_b0_AP.nii -out r_anat_t1_tra.nii -omat anat2epi.txt -dof 12
-$ mrconvert r_anat_t1_tra.nii.gz r_anat_t1_tra.nii
 
--oder: epi_reg is optimized for the case of EPI-to-anatomical coregistration (to be checked)
-$ bet anat_t1_tra anat_t1_tra_brain -m
-$ epi_reg --epi=dti_data_b0_AP.nii --t1=anat_t1_tra --t1brain=anat_t1_tra_brain --out=reg
+COREGISTRATION AND DIFFUSION TENSOR EXTRACTION
+___________________________________________________________________________________
+-in Matlab execute the ad-hoc function cutb.m in order to get the files bvlas_short 
+and bvecs_short for the next step. Type help cutb in Matlab to understand what to 
+feed in input to cutb, but here below you can find an example of call. The minimum 
+number of 3D volumes to keep is 1 b0 + 6 others: if the 4D image is organized as 
+usual in b0, b1250, b1250, b1250... then n=7 is ok as cut value.
+>> [bvals_short, bvecs_short, mrtrix_scheme] = cutb('bvals','bvecs', n);
 
--for the time being I'm running flirt only, but I plan to try also adding fnirt and see how results change
+-take a sample of the diffusion images available and perform FSL flirt registration 
+ from DW-MRI space to anatomical space. Then, run FSL dtifit in order to obtain the
+ DTI of the image(**):
+$ ./dti_warp.sh
+
 
 * GIBBS RINGING ARTEFACTS
 Also known as truncation, ringing, or spectral leakage artefacts, typically 
